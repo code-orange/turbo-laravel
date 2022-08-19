@@ -28,7 +28,7 @@ class PendingTurboStreamResponse implements Responsable
         // will render the deleted Turbo Stream. If you need to treat a soft-deleted
         // model differently, you can do that on your deleted Turbo Stream view.
 
-        if (!$model->exists || (method_exists($model, 'trashed') && $model->trashed())) {
+        if (! $model->exists || (method_exists($model, 'trashed') && $model->trashed())) {
             return $builder->remove($model);
         }
 
@@ -37,70 +37,6 @@ class PendingTurboStreamResponse implements Responsable
         }
 
         return $builder->updated($model, $action ?: 'replace');
-    }
-
-    public function remove(Model|string $target): self
-    {
-        $this->useAction = 'remove';
-        if (!$this->useTargets) {
-            $this->useTarget = is_string($target) ? $target : dom_id($target);
-        }
-
-        return $this;
-    }
-
-    private function inserted(Model|string $target, string $action, $content = null): self
-    {
-        if (!$this->useTargets) {
-            $this->useTarget = $this->resolveTargetFor($target, resource: true);
-        }
-        $this->useAction = $action;
-        $this->partialView = $target instanceof Model ? $this->getPartialViewFor($target) : null;
-        $this->partialData = $target instanceof Model ? $this->getPartialDataFor($target) : [];
-        $this->inlineContent = $content;
-
-        return $this;
-    }
-
-    private function resolveTargetFor(Model|string $target, bool $resource = false): string
-    {
-        if (is_string($target)) {
-            return $target;
-        }
-
-        if ($resource) {
-            return $this->getResourceNameFor($target);
-        }
-
-        return dom_id($target);
-    }
-
-    private function getResourceNameFor(Model $model): string
-    {
-        return Name::forModel($model)->plural;
-    }
-
-    private function getPartialViewFor(Model $model): string
-    {
-        return NamesResolver::partialNameFor($model);
-    }
-
-    private function getPartialDataFor(Model $model): array
-    {
-        return [NamesResolver::resourceVariableName($model) => $model];
-    }
-
-    private function updated(Model|string $target, string $action, $content = null): self
-    {
-        if (!$this->useTargets) {
-            $this->useTarget = $this->resolveTargetFor($target);
-        }
-        $this->useAction = $action;
-        $this->partialView = $target instanceof Model ? $this->getPartialViewFor($target) : null;
-        $this->partialData = $target instanceof Model ? $this->getPartialDataFor($target) : [];
-        $this->inlineContent = $content;
-
-        return $this;
     }
 
     public function append(Model|string $model, $content = null): self
@@ -137,6 +73,16 @@ class PendingTurboStreamResponse implements Responsable
     public function replace(Model|string $model, $content = null): self
     {
         return $this->updated($model, 'replace', $content);
+    }
+
+    public function remove(Model|string $target): self
+    {
+        $this->useAction = 'remove';
+        if (!$this->useTargets) {
+            $this->useTarget = is_string($target) ? $target : dom_id($target);
+        }
+
+        return $this;
     }
 
     public function target(Model|string $target): self
@@ -178,12 +124,12 @@ class PendingTurboStreamResponse implements Responsable
     /**
      * Create an HTTP response that represents the object.
      *
-     * @param Request $request
-     * @return Response
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function toResponse($request)
     {
-        if ($this->useAction !== 'remove' && !$this->partialView && !$this->inlineContent) {
+        if ($this->useAction !== 'remove' && ! $this->partialView && ! $this->inlineContent) {
             throw TurboStreamResponseFailedException::missingPartial();
         }
 
@@ -209,7 +155,7 @@ class PendingTurboStreamResponse implements Responsable
      */
     private function renderInlineContent()
     {
-        if (!$this->inlineContent) {
+        if (! $this->inlineContent) {
             return null;
         }
 
@@ -218,5 +164,59 @@ class PendingTurboStreamResponse implements Responsable
         }
 
         return $this->inlineContent;
+    }
+
+    private function inserted(Model|string $target, string $action, $content = null): self
+    {
+        if (!$this->useTargets) {
+            $this->useTarget = $this->resolveTargetFor($target, resource: true);
+        }
+        $this->useAction = $action;
+        $this->partialView = $target instanceof Model ? $this->getPartialViewFor($target) : null;
+        $this->partialData = $target instanceof Model ? $this->getPartialDataFor($target) : [];
+        $this->inlineContent = $content;
+
+        return $this;
+    }
+
+    private function updated(Model|string $target, string $action, $content = null): self
+    {
+        if (!$this->useTargets) {
+            $this->useTarget = $this->resolveTargetFor($target);
+        }
+        $this->useAction = $action;
+        $this->partialView = $target instanceof Model ? $this->getPartialViewFor($target) : null;
+        $this->partialData = $target instanceof Model ? $this->getPartialDataFor($target) : [];
+        $this->inlineContent = $content;
+
+        return $this;
+    }
+
+    private function resolveTargetFor(Model|string $target, bool $resource = false): string
+    {
+        if (is_string($target)) {
+            return $target;
+        }
+
+        if ($resource) {
+            return $this->getResourceNameFor($target);
+        }
+
+        return dom_id($target);
+    }
+
+    private function getResourceNameFor(Model $model): string
+    {
+        return Name::forModel($model)->plural;
+    }
+
+    private function getPartialViewFor(Model $model): string
+    {
+        return NamesResolver::partialNameFor($model);
+    }
+
+    private function getPartialDataFor(Model $model): array
+    {
+        return [NamesResolver::resourceVariableName($model) => $model];
     }
 }
