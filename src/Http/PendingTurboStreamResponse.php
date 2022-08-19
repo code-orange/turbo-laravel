@@ -5,19 +5,21 @@ namespace Tonysm\TurboLaravel\Http;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Support\HtmlString;
-
-use function Tonysm\TurboLaravel\dom_id;
+use Symfony\Component\HttpFoundation\Response;
 use Tonysm\TurboLaravel\Models\Naming\Name;
 use Tonysm\TurboLaravel\NamesResolver;
+use function Tonysm\TurboLaravel\dom_id;
 
 class PendingTurboStreamResponse implements Responsable
 {
-    private string $useTarget;
+    private ?string $useTarget;
     private string $useAction;
     private ?string $partialView = null;
     private array $partialData = [];
     private $inlineContent = null;
+    private ?string $useTargets = null;
 
     public static function forModel(Model $model, string $action = null): self
     {
@@ -27,7 +29,7 @@ class PendingTurboStreamResponse implements Responsable
         // will render the deleted Turbo Stream. If you need to treat a soft-deleted
         // model differently, you can do that on your deleted Turbo Stream view.
 
-        if (! $model->exists || (method_exists($model, 'trashed') && $model->trashed())) {
+        if (!$model->exists || (method_exists($model, 'trashed') && $model->trashed())) {
             return $builder->remove($model);
         }
 
@@ -77,7 +79,9 @@ class PendingTurboStreamResponse implements Responsable
     public function remove(Model|string $target): self
     {
         $this->useAction = 'remove';
-        $this->useTarget = is_string($target) ? $target : dom_id($target);
+        if (!$this->useTargets) {
+            $this->useTarget = is_string($target) ? $target : dom_id($target);
+        }
 
         return $this;
     }
@@ -85,6 +89,15 @@ class PendingTurboStreamResponse implements Responsable
     public function target(Model|string $target): self
     {
         $this->useTarget = $this->resolveTargetFor($target, resource: true);
+        $this->useTargets = null;
+
+        return $this;
+    }
+
+    public function targets(string $targets): self
+    {
+        $this->useTargets = $targets;
+        $this->useTarget = null;
 
         return $this;
     }
@@ -112,12 +125,12 @@ class PendingTurboStreamResponse implements Responsable
     /**
      * Create an HTTP response that represents the object.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Symfony\Component\HttpFoundation\Response
+     * @param Request $request
+     * @return Response
      */
     public function toResponse($request)
     {
-        if ($this->useAction !== 'remove' && ! $this->partialView && ! $this->inlineContent) {
+        if ($this->useAction !== 'remove' && !$this->partialView && !$this->inlineContent) {
             throw TurboStreamResponseFailedException::missingPartial();
         }
 
@@ -134,6 +147,7 @@ class PendingTurboStreamResponse implements Responsable
             'partial' => $this->partialView,
             'partialData' => $this->partialData,
             'content' => $this->renderInlineContent(),
+            'targets' => $this->useTargets
         ])->render();
     }
 
@@ -142,7 +156,7 @@ class PendingTurboStreamResponse implements Responsable
      */
     private function renderInlineContent()
     {
-        if (! $this->inlineContent) {
+        if (!$this->inlineContent) {
             return null;
         }
 
@@ -155,7 +169,9 @@ class PendingTurboStreamResponse implements Responsable
 
     private function inserted(Model|string $target, string $action, $content = null): self
     {
-        $this->useTarget = $this->resolveTargetFor($target, resource: true);
+        if (!$this->useTargets) {
+            $this->useTarget = $this->resolveTargetFor($target, resource: true);
+        }
         $this->useAction = $action;
         $this->partialView = $target instanceof Model ? $this->getPartialViewFor($target) : null;
         $this->partialData = $target instanceof Model ? $this->getPartialDataFor($target) : [];
@@ -166,7 +182,9 @@ class PendingTurboStreamResponse implements Responsable
 
     private function updated(Model|string $target, string $action, $content = null): self
     {
-        $this->useTarget = $this->resolveTargetFor($target);
+        if (!$this->useTargets) {
+            $this->useTarget = $this->resolveTargetFor($target);
+        }
         $this->useAction = $action;
         $this->partialView = $target instanceof Model ? $this->getPartialViewFor($target) : null;
         $this->partialData = $target instanceof Model ? $this->getPartialDataFor($target) : [];
